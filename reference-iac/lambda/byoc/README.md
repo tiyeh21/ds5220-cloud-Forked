@@ -11,13 +11,6 @@ References:
 # Simple build
 docker build --platform linux/amd64 --provenance=false -t my-lambda-fn .
 
-> **Note:** The `--platform linux/amd64` flag ensures the image targets Lambda's default
-> x86_64 runtime (important if building on Apple Silicon). The `--provenance=false` flag
-> prevents Docker BuildKit from producing OCI image manifests that Lambda does not support.
-> 
-> It is possible to build `arm64` container images and run them in AWS Lambda. See the 
-> `--architecture` flag in the [Create Function](#create-the-lambda-function) section.
-
 # Authenticate
 aws ecr get-login-password --region us-east-1 | \
   docker login --username AWS --password-stdin \
@@ -33,6 +26,14 @@ aws ecr create-repository --repository-name my-lambda-fn
 # Push
 docker push 440848399208.dkr.ecr.us-east-1.amazonaws.com/my-lambda-fn:latest
 ```
+
+> **Note:** The `--platform linux/amd64` flag ensures the image targets Lambda's default
+> x86_64 runtime (important if building on Apple Silicon). The `--provenance=false` flag
+> prevents Docker BuildKit from producing OCI image manifests that Lambda does not support.
+> 
+> It is possible to build `arm64` container images and run them in AWS Lambda. See the 
+> `--architecture` flag in the [Create Function](#create-the-lambda-function) section.
+
 
 ## Trust
 
