@@ -21,13 +21,13 @@ def timer_instances():
     ]
     return instance_ids
 
-@app.schedule('cron(48 13 * * ? *)')
+@app.schedule('cron(48 13 ? * MON-FRI *)')
 def turn_on(event):
     instances = timer_instances()
     ec2.start_instances(InstanceIds=instances)
     return True
 
-@app.schedule('cron(01 14 * * ? *)')
+@app.schedule('cron(01 14 ? * MON-FRI *)')
 def turn_off(event):
     instances = timer_instances()
     ec2.stop_instances(InstanceIds=instances)
