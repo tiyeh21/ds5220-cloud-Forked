@@ -172,7 +172,7 @@ function sendMessage(text) {
 
 ### Reference Code & Examples
 
-- [AWS WebSocket Chat App (official sample)](https://github.com/aws-samples/simple-websockets-chat-app) — the canonical reference; SAM-based, very close to what you're building
+- [AWS WebSocket Chat App (official sample)](https://github.com/aws-samples/websocket-chat-application) — the canonical reference; SAM-based, very close to what you're building
 - [AWS WebSocket API docs](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-websocket-api.html)
 - [Managing WebSocket connections (Management API)](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-how-to-call-websocket-api-connections.html)
 - [React WebSocket hook example](https://github.com/robtaussig/react-use-websocket) — `react-use-websocket` library if you want a cleaner React integration

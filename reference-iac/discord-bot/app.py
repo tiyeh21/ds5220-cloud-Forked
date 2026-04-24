@@ -6,7 +6,7 @@ import discord
 from discord.ext import commands
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-GUILD_ID = os.getenv("DISCORD_GUILD_ID", "1458485887896649759")
+GUILD_ID = "1458485887896649759"
 ddb = boto3.resource('dynamodb', region_name='us-east-1')
 
 intents = discord.Intents.default()
@@ -18,7 +18,6 @@ REGISTER_URL = "https://x5gjqnvpo8.execute-api.us-east-1.amazonaws.com/api/regis
 async def setup_hook() -> None:  # This function is automatically called before the bot starts
     if GUILD_ID:
         guild = discord.Object(id=int(GUILD_ID))
-        bot.tree.clear_commands(guild=guild)  # Wipe stale registrations — remove after one successful sync.
         bot.tree.copy_global_to(guild=guild)
         await bot.tree.sync(guild=guild)  # Guild-scoped sync is instant — good for dev iteration.
     else:
