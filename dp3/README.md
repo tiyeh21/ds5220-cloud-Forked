@@ -3,7 +3,7 @@
 Our final project has **two parts**, and they should be built to fit together:
 
 1. **A data ingestion pipeline** — a cloud-based, serverless process that continually tracks a *meaningful, changing* data source and writes it to a persistent store.
-2. **A read API** — an API Gateway + Lambda service (built with [Chalice](https://aws.github.io/chalice/)) that exposes at least **three** resources on top of the data you've been collecting. At least **one** of those resources must return the URL of a publicly readable plot (PNG/JPG/GIF) stored in S3.
+2. **An integration API** — an API Gateway + Lambda service (built with [Chalice](https://aws.github.io/chalice/)) that exposes at least **three** resources on top of the data you've been collecting. At least **one** of those resources must return the URL of a publicly readable plot (PNG/JPG/GIF) stored in S3.
 
 Your deployed API will be discoverable and callable from the course Discord bot (`/project <project-id>`), so the wire format is fixed — see [API Contract](#api-contract) below.
 
@@ -11,11 +11,11 @@ Please use the `#dp3` channel for your registration, listing, testing, etc.
 
 ---
 
-## Part 1 — The Ingestion Pipeline
+## Part 1 — The Ingestion Pipeline / Project
 
-### The Data Source
+### Data Source
 
-Pick a data source that **changes over time** and is interesting enough to be worth tracking. A few reasonable axes to think about:
+Pick a data source that **changes over time** and is interesting enough to be worth tracking. A few reasonable ideas to get you thinking:
 
 - **Public APIs** — weather, transit arrivals, air quality, USGS earthquakes, stock/crypto prices, NOAA buoys, GitHub repo stars, Wikipedia pageviews, Reddit post counts, ISS position, flight tracking, Steam player counts.
 - **Scraped pages** — a site's front page headlines, a price on a product page, a leaderboard, a job board listing count. (Respect `robots.txt` and rate limits.)
@@ -46,26 +46,28 @@ flowchart LR
 
 | Component | Description |
 |-----------|-------------|
-| **EventBridge rule** | A cron/rate schedule that fires on a sensible cadence for your source (e.g. `rate(15 minutes)`, `rate(1 hour)`). |
+| **A CloudWatch Timer rule** | A cron/rate schedule that fires on a sensible cadence for your source (e.g. `rate(15 minutes)`, `rate(1 hour)`). |
 | **Ingest Lambda** | Fetches the current value(s) from your source and writes a timestamped record to the store. Should be idempotent and handle upstream failures without crashing. |
 | **Persistent store** | DynamoDB is the default choice; S3 (JSONL / Parquet) is fine for append-heavy data. The schema is up to you — design it around the queries your API needs to answer. |
 
 ### Key Implementation Notes
 
-- **Timestamp every record.** Use an ISO 8601 string or a Unix timestamp as a sort key in DynamoDB — almost every later query will sort or filter by time.
-- **Don't trust the source.** Wrap the fetch in a `try/except`, log failures to CloudWatch, and return cleanly so a bad upstream response doesn't brick the schedule.
+- **Timestamp every record.** Use a Unix timestamp or long `datetime` as a sort key in DynamoDB — almost every later query will sort or filter by time.
+- **Don't trust the source.** Wrap the fetch in a `try/except`, log failures to CloudWatch, and return cleanly so a bad upstream response doesn't throw off the schedule.
 - **Mind your cadence.** Free-tier APIs often rate-limit; `rate(1 minute)` is rarely what you want. Pick the slowest cadence that still captures the behaviour you care about.
-- **Plan for the plot.** Part of Part 2 is producing a chart from the accumulated data. Collect the fields you'll need to plot (e.g. timestamp + the metric of interest) from day one — don't discover on the last day that you threw them away.
+- **Plan for your results and plot.** Part of this project is producing a chart from the accumulated data. Collect the fields you'll need to plot (e.g. timestamp + the metric of interest) from day one — don't discover on the last day that you threw them away.
 
 ---
 
-## Part 2 — The Read API
+## Part 2 — The Integration API
 
-A Chalice app deployed to API Gateway + Lambda. It reads from the store Part 1 is filling and exposes resources that let someone *use* the dataset without touching the underlying infrastructure.
+A Chalice app deployed to API Gateway + Lambda. It reads from the datastore Part 1 provides and exposes resources that let someone *use* the dataset without touching the underlying infrastructure.
 
 ### API Contract
 
-The Discord bot calls your API in a specific shape. Conform to this contract exactly or `/project` commands will not work against your service.
+Your API will (1) describe your project and (2) allow others to request specific data elements from it. Your API will integrate with a Discord slash command as a simple and unified way to interact with each project outside of the CLI or code.
+
+The course Discord bot calls your API in a specific shape. Conform to this contract exactly or `/project` commands will not work against your service.
 
 **Zone apex (`GET /`)** — returns a JSON object with two keys:
 
@@ -77,7 +79,7 @@ The Discord bot calls your API in a specific shape. Conform to this contract exa
 ```
 
 - `about` (string) — human-readable description of what this project tracks.
-- `resources` (array of strings) — the resource names, each of which must be callable as `GET /<name>`.
+- `resources` (array of strings) — the resource names you have created, each of which must be callable as `GET /<name>`.
 
 **All other resources (`GET /<name>`)** — return a JSON object with a single `response` key whose value can be anything useful: a string, a number, or the URL of a plot in S3.
 
@@ -93,13 +95,14 @@ The Discord bot calls your API in a specific shape. Conform to this contract exa
 { "response": "https://s3.amazonaws.com/your-bucket/dp3/your-project/latest.png" }
 ```
 
-Your **three minimum resources** must include:
+You must expose at least **three resources**, which should include:
 
 | Resource | What it should do |
 |----------|-------------------|
-| A *current* / point-in-time resource | Return the most recent sample or a summary of it. |
+| A *current* / point-in-time resource | Return the most recent sample or a summary of it (as `response`). |
+| A *trend* / summary resource | Return a derived value — trend, average, delta over a window, top-N, etc (as `response`). |
 | A *plot* resource | Return a URL (as `response`) to an image in S3 generated from the collected data. |
-| A *trend* / summary resource | Return a derived value — trend, average, delta over a window, top-N, etc. |
+
 
 You're encouraged to add more than three; the bot will list whatever you put in `resources`.
 
@@ -136,7 +139,7 @@ app = Chalice(app_name='my-project')
 def index():
     return {
         "about": "Tracks X over time.",
-        "resources": ["current", "plot", "trend"],
+        "resources": ["current", "trend", "plot"],
     }
 
 @app.route('/current')
@@ -154,18 +157,17 @@ def trend():
 
 Use that project as the starting template (`pipenv install chalice`, `chalice new-project`, then adapt).
 
-### Plot Resource Details
+### Plot Details
 
 The plot resource is the one that usually catches people out. Two patterns, pick one:
 
-1. **Render on write (cheap reads).** The Part 1 ingest Lambda — or a second scheduled Lambda — regenerates the plot after each new sample and uploads it to S3 at a fixed key (e.g. `dp3/<project>/latest.png`). Your `/plot` resource just returns that stable URL.
+1. **Render on write (cheap reads).** The Part 1 ingestion Lambda — or a second scheduled Lambda — regenerates the plot after each new sample and uploads it to S3 at a fixed key (e.g. `s3://dp3/<project>/latest.png`). Your `/plot` resource just returns that stable URL.
 2. **Render on request (fresh plots).** The `/plot` Lambda queries the store, builds the chart with `matplotlib`/`seaborn`, uploads to S3 with a generated key, and returns the URL.
 
 Either way:
 
 - The S3 object must be **publicly readable** (object ACL `public-read` or a bucket policy that allows `s3:GetObject` on that prefix). Otherwise the URL works for you and nobody else.
 - `matplotlib` is a heavy dependency — if you render in the API Lambda, expect a cold start hit. Pattern (1) avoids this.
-- See `reference-iac/discord-bot-api/ezra_klein_plot.py` for a minimal `matplotlib`/`seaborn` example that writes a PNG.
 
 ### Key Implementation Notes
 
@@ -175,6 +177,16 @@ Either way:
 - All `response` values should be JSON-serializable. A Decimal from DynamoDB is not — cast to `float` or `str`.
 
 ---
+
+## The Course Discord Bot
+
+The bot named `cloudbot` has been running in our server and should be accessed from the [`#dp3`](https://discord.com/channels/1458485887896649759/1496136340050411641) channel.
+
+Bot commands:
+- `/instructions` - Returns the GitHub URL for the data project's README file.
+- `/list` - Lists all currently registered student projects by project name.
+- `/register` - The command to register your bot. If details change, simply overwrite your values using the same `project_id` as before.
+- `/project` - The main working command to fetch information about each project and to then fetch results for each resource it offers.
 
 ## Registering With the Class Bot
 
@@ -253,7 +265,7 @@ Then invoke specific resources for that project to see their response:
 
 - [Chalice docs](https://aws.github.io/chalice/) — the framework you'll use for Part 2.
 - [Chalice quickstart](https://aws.github.io/chalice/quickstart.html) — `new-project` → `deploy` in under 10 minutes.
-- [EventBridge scheduled rules](https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-create-rule-schedule.html) — how to fire a Lambda on a cadence.
+- [CloudWatch scheduled rules](https://aws.github.io/chalice/topics/events.html#scheduled-events) — how to fire a Lambda on a cadence with Chalice.
 - [DynamoDB developer guide](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/Introduction.html) — Query vs. Scan, time-series sort keys, TTL.
 - [boto3 S3 reference](https://boto3.amazonaws.com/v1/documentation/api/latest/reference/services/s3.html) — `put_object` with `ACL='public-read'`, object URLs.
 - [matplotlib pyplot tutorial](https://matplotlib.org/stable/tutorials/pyplot.html) and [seaborn](https://seaborn.pydata.org/) — for the plot resource.
