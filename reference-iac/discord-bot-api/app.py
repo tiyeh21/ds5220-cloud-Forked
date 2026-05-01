@@ -1,5 +1,4 @@
 from chalice import Chalice
-import requests
 import boto3
 
 app = Chalice(app_name='discord-bot-api')
@@ -13,12 +12,16 @@ def index():
 def ezra():
     return {"response": "Ezra Klein talks a lot."}
 
+@app.route('/data')
+def data():
+    return {"response": "Ezra Klein currently talks **63%** of the time Guests speak approximately **37%** of the time."}
+
 @app.route('/graphic')
 def graphic():
     return {"response": "https://s3.amazonaws.com/uvasds-systems/ds5220/dp3/ezra_klein_speaking.png"}
 
 @app.route('/photo')
-def ezra_graphic():
+def photo():
     return {"response": "https://cdn.britannica.com/61/275261-050-41011B75/ezra-klein-at-chicago-humanities-festival-2025.jpg"}
 
 @app.route('/bot/{name}')
